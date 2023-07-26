@@ -1,6 +1,7 @@
 import itertools
 import math
 import sys
+import re
 from dataclasses import dataclass, field
 from typing import (
     Callable,
@@ -44,6 +45,9 @@ Index = int
 LeafID = int
 LN = Union[Leaf, Node]
 
+
+# This regex should contain a single capture group capturing the entire match.
+_PRAGMA_REGEX = re.compile("( *# (?:pylint|pytype):)")
 
 @dataclass
 class Line:
@@ -293,6 +297,22 @@ class Line:
                         return True
 
         return False
+
+
+    def trailing_pragma_comment_length(self) -> int:
+        if not self.leaves:
+            return 0
+
+        last_leaf = self.leaves[-1]
+        length = 0
+        for comment in self.comments.get(id(last_leaf), []):
+            # str(comment) contains the whitespace preceding the `#`
+            comment_str = str(comment)
+            parts = _PRAGMA_REGEX.split(comment_str, maxsplit=1)
+            if len(parts) == 3:
+                length += len(parts[1]) + len(parts[2])
+        return length
+
 
     def contains_multiline_strings(self) -> bool:
         return any(is_multiline_string(leaf) for leaf in self.leaves)
@@ -770,9 +790,10 @@ def is_line_short_enough(  # noqa: C901
 
     width = str_width if mode.preview else len
 
+    effective_length = width(line_str) - line.trailing_pragma_comment_length()
     if Preview.multiline_string_handling not in mode:
         return (
-            width(line_str) <= mode.line_length
+            effective_length <= mode.line_length
             and "\n" not in line_str  # multiline strings
             and not line.contains_standalone_comments()
         )
@@ -781,7 +802,7 @@ def is_line_short_enough(  # noqa: C901
         return False
     if "\n" not in line_str:
         # No multiline strings (MLS) present
-        return width(line_str) <= mode.line_length
+        return effective_length <= mode.line_length
 
     first, *_, last = line_str.split("\n")
     if width(first) > mode.line_length or width(last) > mode.line_length:
