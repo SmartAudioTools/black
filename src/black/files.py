@@ -237,14 +237,38 @@ def get_gitignore(root: Path) -> PathSpec:
     """Return a PathSpec matching gitignore content if present."""
     gitignore = root / ".gitignore"
     lines: List[str] = []
+    path_spec = PathSpec.from_lines("gitwildmatch", [])
     if gitignore.is_file():
         with gitignore.open(encoding="utf-8") as gf:
             lines = gf.readlines()
-    try:
-        return PathSpec.from_lines("gitwildmatch", lines)
-    except GitWildMatchPatternError as e:
-        err(f"Could not parse {gitignore}: {e}")
-        raise
+        try:
+            path_spec += PathSpec.from_lines("gitwildmatch", lines)
+        except GitWildMatchPatternError as e:
+            err(f"Could not parse {gitignore}: {e}")
+            raise
+
+    hgignore = root / ".hgignore"
+    lines: List[str] = []
+    if hgignore.is_file():
+        with hgignore.open(encoding="utf-8") as gf:
+            lines = gf.readlines()
+        try:
+            path_spec += PathSpec.from_lines("gitwildmatch", lines)
+        except GitWildMatchPatternError as e:
+            err(f"Could not parse {hgignore}: {e}")
+            raise
+
+    blackignore = root / ".blackignore"
+    if blackignore.is_file():
+        print(f"Found blackignore file in {root}")
+        with blackignore.open(encoding="utf-8") as gf:
+            lines = gf.readlines()
+        try:
+            path_spec += PathSpec.from_lines("gitwildmatch", lines)
+        except GitWildMatchPatternError as e:
+            err(f"Could not parse {blackignore}: {e}")
+            raise
+    return path_spec
 
 
 def normalize_path_maybe_ignore(
